@@ -1,6 +1,6 @@
 import wandb
 
-def GCNLoggerInit():
+def GCNLoggerInit(device):
     wandb.init(
       # Set the project where this run will be logged
       project="GCN-intro",
@@ -11,6 +11,7 @@ def GCNLoggerInit():
       "architecture": "GCN",
       "dataset": "Cora (data[0])",
       "epochs": 200,
+      "device": device
     })
 
 def GCNLoggerUpdate(loss):
