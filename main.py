@@ -1,4 +1,7 @@
 import torch
+from torch.optim import AdamW
+import utils
+
 from torch_geometric.data import Data
 from model import GCN
 from train import trainGCN
@@ -7,12 +10,12 @@ from torch_geometric.datasets import Planetoid
 from torch_geometric import seed_everything
 from torch_geometric.graphgym.utils.device import auto_select_device
 from torch_geometric.graphgym.optim import create_optimizer, create_scheduler, OptimizerConfig
-from graphgps.optimizer.extra_optimizers import ExtendedSchedulerConfig
+from extra_optimizers import ExtendedSchedulerConfig
 from logger import GCNLoggerInit,GCNLoggerEnd
-from data import load_dataset_master
 from model import GPSModel
 from train import custom_train
 import warnings
+from loader import create_loader
 
 def GCNPipeline():
     dataset = Planetoid(root='/tmp/Cora', name='Cora')
@@ -49,7 +52,8 @@ def run_loop_settings():
     return run_ids, seeds, split_indices
 
 def new_optimizer_config():
-    return OptimizerConfig(optimizer='adamW',
+    #TODO should be "adamW" but not supported by create_optimizer
+    return OptimizerConfig(optimizer='adam',
                            base_lr=0.001,
                            weight_decay=0.01)
 
@@ -70,12 +74,12 @@ def PeptidesWithMamba():
         seed_everything(seed)
         auto_select_device()
         # Set machine learning pipeline
-        loaders = load_dataset_master()
+        loaders = create_loader()
         model = GPSModel(100,10)
-        optimizer = create_optimizer(model.parameters(),
-                                     new_optimizer_config())
-        scheduler = create_scheduler(optimizer, new_scheduler_config())
+        optimizer = AdamW(model.parameters())
+        scheduler = utils.get_cosine_schedule_with_warmup(optimizer=optimizer,num_warmup_steps=10,num_training_steps=200)
         # Start training
+        print("Training started...")
         custom_train(loaders, model, optimizer,scheduler)
 
 if __name__ == "__main__":

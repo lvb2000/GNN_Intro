@@ -1,10 +1,11 @@
 import torch
+import torch.nn.functional as F
 from functools import partial
 import tqdm
 import numpy as np
 from torch_geometric.data import Data
 from torch_geometric.datasets import TUDataset, Planetoid
-from graphgps.loader.dataset.peptides_functional import PeptidesFunctionalDataset
+from peptides_functional import PeptidesFunctionalDataset
 from torch_geometric.utils import (get_laplacian, to_scipy_sparse_matrix,
                                    to_undirected)
 from torch_geometric.graphgym.loader import index2mask, set_dataset_attr
@@ -97,18 +98,12 @@ def load_dataset_master():
     """
     dataset = preformat_Peptides()
 
-    # Precompute necessary statistics for positional encodings.
-    pe_enabled_list = []
-    pe_enabled_list.append('LapPE')
-    if pe_enabled_list:
-        # Estimate directedness based on 10 graphs to save time.
-        is_undirected = all(d.is_undirected() for d in dataset[:10])
-        pre_transform_in_memory(dataset,
-                                partial(compute_posenc_stats,
-                                        pe_types=pe_enabled_list,
-                                        is_undirected=is_undirected),
-                                show_progress=True
-                                )
+    # Estimate directedness based on 10 graphs to save time.
+    is_undirected = all(d.is_undirected() for d in dataset[:10])
+    pre_transform_in_memory(dataset,
+                            partial(compute_posenc_stats,
+                                    is_undirected=is_undirected)
+                            )
     # Set standard dataset train/val/test splits
     if hasattr(dataset, 'split_idxs'):
         set_dataset_splits(dataset, dataset.split_idxs)
@@ -189,7 +184,7 @@ def preformat_Peptides():
     dataset.split_idxs = [s_dict[s] for s in ['train', 'val', 'test']]
     return dataset
 
-def pre_transform_in_memory(dataset, transform_func, show_progress=False):
+def pre_transform_in_memory(dataset, transform_func):
     """Pre-transform already loaded PyG dataset object.
 
     Apply transform function to a loaded PyG dataset object so that
@@ -209,10 +204,7 @@ def pre_transform_in_memory(dataset, transform_func, show_progress=False):
         return dataset
 
     data_list = [transform_func(dataset.get(i))
-                 for i in tqdm(range(len(dataset)),
-                               disable=not show_progress,
-                               mininterval=10,
-                               miniters=len(dataset)//20)]
+                 for i in range(len(dataset))]
     data_list = list(filter(None, data_list))
 
     dataset._indices = None

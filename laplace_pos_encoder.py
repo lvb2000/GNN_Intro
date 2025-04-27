@@ -1,6 +1,5 @@
 import torch
 import torch.nn as nn
-from torch_geometric.graphgym.config import cfg
 from torch_geometric.graphgym.register import register_node_encoder
 
 
@@ -19,20 +18,19 @@ class LapPENodeEncoder(torch.nn.Module):
 
     def __init__(self, dim_emb, expand_x=True):
         super().__init__()
-        dim_in = cfg.share.dim_in  # Expected original input node features dim
+        dim_in = 10  # Expected original input node features dim
 
-        pecfg = cfg.posenc_LapPE
-        dim_pe = pecfg.dim_pe  # Size of Laplace PE embedding
-        model_type = pecfg.model  # Encoder NN model type for PEs
+        dim_pe = 16  # Size of Laplace PE embedding
+        model_type = 'DeepSet' # Encoder NN model type for PEs
         if model_type not in ['Transformer', 'DeepSet']:
             raise ValueError(f"Unexpected PE model {model_type}")
         self.model_type = model_type
-        n_layers = pecfg.layers  # Num. layers in PE encoder model
-        n_heads = pecfg.n_heads  # Num. attention heads in Trf PE encoder
-        post_n_layers = pecfg.post_layers  # Num. layers to apply after pooling
-        max_freqs = pecfg.eigen.max_freqs  # Num. eigenvectors (frequencies)
-        norm_type = pecfg.raw_norm_type.lower()  # Raw PE normalization layer type
-        self.pass_as_var = pecfg.pass_as_var  # Pass PE also as a separate variable
+        n_layers = 2  # Num. layers in PE encoder model
+        n_heads = 0  # Num. attention heads in Trf PE encoder
+        post_n_layers = 0  # Num. layers to apply after pooling
+        max_freqs = 10  # Num. eigenvectors (frequencies)
+        norm_type = None  # Raw PE normalization layer type
+        self.pass_as_var = None  # Pass PE also as a separate variable
 
         if dim_emb - dim_pe < 1:
             raise ValueError(f"LapPE size {dim_pe} is too large for "

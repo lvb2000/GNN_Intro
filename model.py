@@ -6,9 +6,12 @@ from torch_scatter import scatter
 import torch_geometric.nn as pygnn
 import torch_geometric.data as pygdata
 from torch_geometric.utils import to_dense_batch, degree
-import torch_geometric.graphgym.register as register
-from mamba_ssm import Mamba
+from torch_geometric.graphgym import GNNGraphHead,BondEncoder
+from mamba import Mamba, ModelArgs
 import utils
+from torch_geometric.graphgym.models.encoder import AtomEncoder
+from laplace_pos_encoder import LapPENodeEncoder
+from composed_encoders import concat_node_encoders
 
 class GCN(torch.nn.Module):
     def __init__(self,node_features,classes):
@@ -37,14 +40,13 @@ class FeatureEncoder(torch.nn.Module):
         super(FeatureEncoder, self).__init__()
         self.dim_in = dim_in
         # Encode integer node features via nn.Embeddings
-        NodeEncoder = register.node_encoder_dict['Atom+LapPE']
+        NodeEncoder = concat_node_encoders([AtomEncoder, LapPENodeEncoder],['LapPE'])
         self.node_encoder = NodeEncoder(96)
         # Update dim_in to reflect the new dimension fo the node features
         self.dim_in = 96
 
         # Hard-set edge dim for PNA.
-        EdgeEncoder = register.edge_encoder_dict['Bond']
-        self.edge_encoder = EdgeEncoder(96)
+        self.edge_encoder = BondEncoder(96)
 
 
     def forward(self, batch):
@@ -67,8 +69,7 @@ class GPSModel(torch.nn.Module):
             layers.append(GMBLayer(channels=96))
         self.layers = torch.nn.Sequential(*layers)
 
-        GNNHead = register.head_dict['default']
-        self.post_mp = GNNHead(dim_in=96, dim_out=dim_out)
+        self.post_mp = GNNGraphHead(dim_in=96, dim_out=dim_out)
 
     def forward(self, batch):
         for module in self.children():
@@ -117,12 +118,8 @@ class GMBLayer(torch.nn.Module):
                                              equivstable_pe=equivstable_pe)
 
         # Global model t
-        self.self_attn = Mamba(
-            d_model=channels,
-            d_state=d_state,
-            d_conv=d_conv,
-            expand=1
-        )
+        model_args = ModelArgs(d_model=channels,n_layer=4,d_state=d_state, d_conv=d_conv,expand=1)
+        self.self_attn = Mamba(model_args)
 
         self.norm1_local = nn.BatchNorm1d(channels)
         self.norm1_attn = nn.BatchNorm1d(channels)
@@ -132,7 +129,7 @@ class GMBLayer(torch.nn.Module):
 
         self.mlp =nn.Sequential(
             nn.Linear(channels, channels * 2),
-            F.relu,
+            nn.ReLU(),
             nn.Dropout(dropout),
             nn.Linear(channels * 2, channels),
             nn.Dropout(dropout),
@@ -167,7 +164,7 @@ class GMBLayer(torch.nn.Module):
         if batch.split == 'train':
             # Get degree of each node in batch
             deg = degree(batch.edge_index[0], batch.x.shape[0]).to(torch.float)
-            deg_noise = torch.rand_like(deg).to(deg.device)
+            deg_noise = torch.rand_like(deg)
             # sort by degree
             h_ind_perm = utils.lexsort([deg+deg_noise, batch.batch])
             # apply sort
@@ -181,7 +178,7 @@ class GMBLayer(torch.nn.Module):
             mamba_arr = []
             deg = degree(batch.edge_index[0], batch.x.shape[0]).to(torch.float)
             for i in range(5):
-                deg_noise = torch.rand_like(deg).to(deg.device)
+                deg_noise = torch.rand_like(deg)
                 h_ind_perm = utils.lexsort([deg+deg_noise, batch.batch])
                 h_dense, mask = to_dense_batch(h[h_ind_perm], batch.batch[h_ind_perm])
                 h_ind_perm_reverse = torch.argsort(h_ind_perm)
@@ -200,13 +197,13 @@ class GMBLayer(torch.nn.Module):
         h = sum(h_out_list)
 
         # Feed Forward block.
-        h = h + self.mlp
+        h = h + self.mlp(h)
         h = self.norm2(h)
 
         batch.x = h
         return batch
 
-class GatedGCNLayer(pyg_nn.conv.MessagePassing):
+class GatedGCNLayer(pygnn.conv.MessagePassing):
     """
         GatedGCN layer
         Residual Gated Graph ConvNets
