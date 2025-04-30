@@ -2,9 +2,10 @@ import torch
 from torch_geometric.data import Data
 from torch_geometric.datasets import TUDataset
 from torch_geometric.loader import DataLoader
-from torch_geometric.graphgym.loss import compute_loss
+from loss import compute_loss
 import torch.nn.functional as F
 from logger import GCNLoggerUpdate
+from tqdm import tqdm
 
 def loaderTryout():
     dataset = TUDataset(root='/tmp/ENZYMES', name='ENZYMES', use_node_attr=True)
@@ -36,50 +37,29 @@ def trainGCN(model,data):
         optimizer.step()
         GCNLoggerUpdate(loss)
 
-def subsample_batch_index(batch, min_k = 1, ratio = 0.1):
-    torch.manual_seed(0)
-    unique_batches = torch.unique(batch.batch)
-    # Initialize list to store permuted indices
-    permuted_indices = []
-    for batch_index in unique_batches:
-        # Extract indices for the current batch
-        indices_in_batch = (batch.batch == batch_index).nonzero().squeeze()
-        # See how many nodes in the graphs
-        # And how many left after subsetting
-        k = int(indices_in_batch.size(0)*ratio)
-        # If subsetting gives more than 1, do subsetting
-        if k > min_k:
-            perm = torch.randperm(indices_in_batch.size(0))
-            idx = perm[:k]
-            idx = indices_in_batch[idx]
-            idx, _ = torch.sort(idx)
-        # Otherwise retain entire graph
-        else:
-            idx = indices_in_batch
-        permuted_indices.append(idx)
-    idx = torch.cat(permuted_indices)
-    return idx
-
-def train_epoch( loader, model, optimizer, batch_accumulation):
+def train_epoch( loader, model, optimizer, batch_accumulation,device):
 
     model.train()
     optimizer.zero_grad()
     for iter, batch in enumerate(loader):
-        print(batch)
-        print(len(batch))
         batch.split = 'train'
+        batch.to(device)
         
         pred, true = model(batch)
+        #print(f"Predictions shape: {pred.shape}, Values: {pred[:5]}")
+        #print(f"True values shape: {true.shape}, Values: {true[:5]}")
         loss, pred_score = compute_loss(pred, true)
 
         loss.backward()
         # Parameters update after accumulating gradients for given num. batches.
         if ((iter + 1) % batch_accumulation == 0) or (iter + 1 == len(loader)):
+            print("Performing optimization step...")
             torch.nn.utils.clip_grad_norm_(model.parameters(), 1.0)
             optimizer.step()
             optimizer.zero_grad()
+            print(f"Loss: {loss.item():.4f} | Prediction Score: {pred_score.mean().item():.4f}")
 
-def custom_train(loaders, model, optimizer, scheduler):
+def custom_train(loaders, model, optimizer, scheduler,device):
     """
     Customized training pipeline.
 
@@ -94,7 +74,7 @@ def custom_train(loaders, model, optimizer, scheduler):
     end_epoch = 200
     batch_accumulation = 10
     for _ in range(start_epoch, end_epoch):
-        train_epoch( loaders[0], model, optimizer, batch_accumulation)
+        train_epoch( loaders[0], model, optimizer, batch_accumulation,device)
         scheduler.step()
 
 if __name__ == "__main__":

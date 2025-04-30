@@ -9,7 +9,6 @@ from evaluation import evaluationGCN
 from torch_geometric.datasets import Planetoid
 from torch_geometric import seed_everything
 from torch_geometric.graphgym.utils.device import auto_select_device
-from torch_geometric.graphgym.optim import create_optimizer, create_scheduler, OptimizerConfig
 from extra_optimizers import ExtendedSchedulerConfig
 from logger import GCNLoggerInit,GCNLoggerEnd
 from model import GPSModel
@@ -51,12 +50,6 @@ def run_loop_settings():
     run_ids = seeds
     return run_ids, seeds, split_indices
 
-def new_optimizer_config():
-    #TODO should be "adamW" but not supported by create_optimizer
-    return OptimizerConfig(optimizer='adam',
-                           base_lr=0.001,
-                           weight_decay=0.01)
-
 def new_scheduler_config():
     return ExtendedSchedulerConfig(
         scheduler='cosine_with_warmup',
@@ -70,17 +63,23 @@ def PeptidesWithMamba():
     torch.set_num_threads(1)
     # Repeat for multiple experiment runs
     for run_id, seed, split_index in zip(*run_loop_settings()):
-
+        device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+        print(f"Using device: {device}")
         seed_everything(seed)
-        auto_select_device()
+        # auto_select_device()
         # Set machine learning pipeline
         loaders = create_loader()
-        model = GPSModel(100,10)
-        optimizer = AdamW(model.parameters())
+        model = GPSModel(100,10).to(device)
+        base_lr = 0.001
+        weight_decay = 0.01
+        print(f"Optimizer settings:")
+        print(f"Learning rate: {base_lr}")
+        print(f"Weight decay: {weight_decay}")
+        optimizer = AdamW(model.parameters(),lr=base_lr,weight_decay=weight_decay)
         scheduler = utils.get_cosine_schedule_with_warmup(optimizer=optimizer,num_warmup_steps=10,num_training_steps=200)
         # Start training
         print("Training started...")
-        custom_train(loaders, model, optimizer,scheduler)
+        custom_train(loaders, model, optimizer,scheduler,device)
 
 if __name__ == "__main__":
     PeptidesWithMamba()

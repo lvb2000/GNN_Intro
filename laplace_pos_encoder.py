@@ -1,9 +1,7 @@
 import torch
 import torch.nn as nn
-from torch_geometric.graphgym.register import register_node_encoder
 
 
-@register_node_encoder('LapPE')
 class LapPENodeEncoder(torch.nn.Module):
     """Laplace Positional Embedding node encoder.
 

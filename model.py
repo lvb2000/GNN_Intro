@@ -6,12 +6,119 @@ from torch_scatter import scatter
 import torch_geometric.nn as pygnn
 import torch_geometric.data as pygdata
 from torch_geometric.utils import to_dense_batch, degree
-from torch_geometric.graphgym import GNNGraphHead,BondEncoder
-from mamba import Mamba, ModelArgs
+from torch_geometric.graphgym import BondEncoder, AtomEncoder
+from torch_geometric.graphgym.models.layer import GeneralMultiLayer, Linear
+from mamba_ssm import Mamba
 import utils
-from torch_geometric.graphgym.models.encoder import AtomEncoder
 from laplace_pos_encoder import LapPENodeEncoder
 from composed_encoders import concat_node_encoders
+from dataclasses import replace, dataclass
+
+@dataclass
+class LayerConfig:
+    # batchnorm parameters.
+    has_batchnorm: bool = False
+    bn_eps: float = 1e-5
+    bn_mom: float = 0.1
+
+    # mem parameters.
+    mem_inplace: bool = False
+
+    # gnn parameters.
+    dim_in: int = -1
+    dim_out: int = -1
+    edge_dim: int = -1
+    dim_inner: int = None
+    num_layers: int = 2
+    has_bias: bool = True
+    # regularizer parameters.
+    has_l2norm: bool = True
+    dropout: float = 0.0
+    # activation parameters.
+    has_act: bool = True
+    final_act: bool = True
+    act: str = 'relu'
+
+    # other parameters.
+    keep_edge: float = 0.5
+
+def new_layer_config(dim_in, dim_out, num_layers, has_act, has_bias):
+    return LayerConfig(
+        has_batchnorm=True,
+        dim_in=dim_in,
+        dim_out=dim_out,
+        edge_dim=96,
+        has_act=has_act,
+        has_bias=has_bias,
+        dim_inner=96,
+        num_layers=num_layers
+    )
+
+class MLP(nn.Module):
+    """
+    Basic MLP model.
+    Here 1-layer MLP is equivalent to a Liner layer.
+
+    Args:
+        dim_in (int): Input dimension
+        dim_out (int): Output dimension
+        bias (bool): Whether has bias term
+        dim_inner (int): The dimension for the inner layers
+        num_layers (int): Number of layers in the stack
+        **kwargs (optional): Additional args
+    """
+    def __init__(self, layer_config: LayerConfig, **kwargs):
+        super().__init__()
+        dim_inner = layer_config.dim_in \
+            if layer_config.dim_inner is None \
+            else layer_config.dim_inner
+        layer_config.has_bias = True
+        layers = []
+        if layer_config.num_layers > 1:
+            sub_layer_config = LayerConfig(
+                num_layers=layer_config.num_layers - 1,
+                dim_in=layer_config.dim_in, dim_out=dim_inner,
+                dim_inner=dim_inner, final_act=True)
+            layers.append(GeneralMultiLayer('linear', sub_layer_config))
+            layer_config = replace(layer_config, dim_in=dim_inner)
+            layers.append(Linear(layer_config))
+        else:
+            layers.append(Linear(layer_config))
+        self.model = nn.Sequential(*layers)
+
+    def forward(self, batch):
+        if isinstance(batch, torch.Tensor):
+            batch = self.model(batch)
+        else:
+            batch.x = self.model(batch.x)
+        return batch
+
+class GNNGraphHead(nn.Module):
+    """
+    GNN prediction head for graph prediction tasks.
+    The optional post_mp layer (specified by cfg.gnn.post_mp) is used
+    to transform the pooled embedding using an MLP.
+
+    Args:
+        dim_in (int): Input dimension
+        dim_out (int): Output dimension. For binary prediction, dim_out=1.
+    """
+    def __init__(self, dim_in, dim_out):
+        super().__init__()
+        self.layer_post_mp = MLP(
+            new_layer_config(dim_in, dim_out, 1,
+                             has_act=False, has_bias=True))
+        self.pooling_fun = pygnn.global_mean_pool
+
+    def _apply_index(self, batch):
+        return batch.graph_feature, batch.y
+
+    def forward(self, batch):
+        graph_emb = self.pooling_fun(batch.x, batch.batch)
+        graph_emb = self.layer_post_mp(graph_emb)
+        batch.graph_feature = graph_emb
+        pred, label = self._apply_index(batch)
+        return pred, label
 
 class GCN(torch.nn.Module):
     def __init__(self,node_features,classes):
@@ -118,8 +225,13 @@ class GMBLayer(torch.nn.Module):
                                              equivstable_pe=equivstable_pe)
 
         # Global model t
-        model_args = ModelArgs(d_model=channels,n_layer=4,d_state=d_state, d_conv=d_conv,expand=1)
-        self.self_attn = Mamba(model_args)
+        #model_args = ModelArgs(d_model=channels,n_layer=4,d_state=d_state, d_conv=d_conv,expand=1)
+        #self.self_attn = Mamba(model_args)
+        self.self_attn = Mamba(d_model=channels, # Model dimension d_model
+                        d_state=16,  # SSM state expansion factor
+                        d_conv=4,    # Local convolution width
+                        expand=1,    # Block expansion factor
+                    )
 
         self.norm1_local = nn.BatchNorm1d(channels)
         self.norm1_attn = nn.BatchNorm1d(channels)

@@ -1,7 +1,7 @@
 import torch
 import torch.nn.functional as F
 from functools import partial
-import tqdm
+from tqdm import tqdm
 import numpy as np
 from torch_geometric.data import Data
 from torch_geometric.datasets import TUDataset, Planetoid
@@ -203,8 +203,11 @@ def pre_transform_in_memory(dataset, transform_func):
     if transform_func is None:
         return dataset
 
-    data_list = [transform_func(dataset.get(i))
-                 for i in range(len(dataset))]
+    #data_list = [transform_func(dataset.get(i))
+    #             for i in range(len(dataset))]
+    data_list = [transform_func(dataset.get(i)) 
+                for i in tqdm(range(len(dataset)), 
+                desc="Pre-transforming")]
     data_list = list(filter(None, data_list))
 
     dataset._indices = None
