@@ -59,7 +59,7 @@ def train_epoch( loader, model, optimizer, batch_accumulation,device,epoch):
             optimizer.zero_grad()
             ap_per_class = average_precision_score(true.detach().cpu().numpy(), pred_score.detach().cpu().numpy(), average=None)
             mean_ap = ap_per_class.mean()
-            LoggerUpdate(loss,mean_ap,epoch)
+            LoggerUpdate(loss,ap_per_class,mean_ap,epoch)
 
 
 def custom_train(loaders, model, optimizer, scheduler,device):

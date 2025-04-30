@@ -15,10 +15,10 @@ def LoggerInit(device):
       "device": device
     })
 
-def LoggerUpdate(loss,ap,epoch):
+def LoggerUpdate(loss,ap_per_class,ap,epoch):
     wandb.log({"loss": loss},step=epoch)
-    wandb.log({"AP_mean": np.mean(ap)},step=epoch)
-    wandb.log({"AP": {f"Class_{i}": ap[i] for i in range(len(ap))}},step=epoch)
+    wandb.log({"AP_mean": ap},step=epoch)
+    wandb.log({"AP": {f"Class_{i}": ap_per_class[i] for i in range(len(ap_per_class))}},step=epoch)
 
 def LoggerEnd():
     wandb.finish()
