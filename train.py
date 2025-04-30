@@ -57,7 +57,7 @@ def train_epoch( loader, model, optimizer, batch_accumulation,device,epoch):
             torch.nn.utils.clip_grad_norm_(model.parameters(), 1.0)
             optimizer.step()
             optimizer.zero_grad()
-            ap_per_class = average_precision_score(true.cpu(), pred_score.cpu(), average=None)
+            ap_per_class = average_precision_score(true.detach().cpu().numpy(), pred_score.detach().cpu().numpy(), average=None)
             mean_ap = ap_per_class.mean()
             LoggerUpdate(loss,mean_ap,epoch)
 
