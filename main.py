@@ -10,7 +10,7 @@ from torch_geometric.datasets import Planetoid
 from torch_geometric import seed_everything
 from torch_geometric.graphgym.utils.device import auto_select_device
 from extra_optimizers import ExtendedSchedulerConfig
-from logger import GCNLoggerInit,GCNLoggerEnd
+from logger import LoggerInit,LoggerEnd
 from model import GPSModel
 from train import custom_train
 import warnings
@@ -19,13 +19,13 @@ from loader import create_loader
 def GCNPipeline():
     dataset = Planetoid(root='/tmp/Cora', name='Cora')
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-    GCNLoggerInit(device)
+    LoggerInit(device)
     print(f"Device: {device}")
     model = GCN(dataset.num_node_features,dataset.num_classes).to(device)
     data = dataset[0].to(device)
     trainGCN(model,data)
     evaluationGCN(model,data)
-    GCNLoggerEnd()
+    LoggerEnd()
 
 def run_loop_settings():
     """Create main loop execution settings based on the current cfg.
@@ -65,6 +65,7 @@ def PeptidesWithMamba():
     for run_id, seed, split_index in zip(*run_loop_settings()):
         device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
         print(f"Using device: {device}")
+        LoggerInit(device)
         seed_everything(seed)
         # auto_select_device()
         # Set machine learning pipeline
@@ -80,6 +81,7 @@ def PeptidesWithMamba():
         # Start training
         print("Training started...")
         custom_train(loaders, model, optimizer,scheduler,device)
+        LoggerEnd()
 
 if __name__ == "__main__":
     PeptidesWithMamba()

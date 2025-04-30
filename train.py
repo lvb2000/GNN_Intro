@@ -2,9 +2,10 @@ import torch
 from torch_geometric.data import Data
 from torch_geometric.datasets import TUDataset
 from torch_geometric.loader import DataLoader
+from sklearn.metrics import average_precision_score
 from loss import compute_loss
 import torch.nn.functional as F
-from logger import GCNLoggerUpdate
+from logger import LoggerUpdate
 from tqdm import tqdm
 
 def loaderTryout():
@@ -35,9 +36,9 @@ def trainGCN(model,data):
         loss = F.nll_loss(out[data.train_mask], data.y[data.train_mask])
         loss.backward()
         optimizer.step()
-        GCNLoggerUpdate(loss)
+        LoggerUpdate(loss)
 
-def train_epoch( loader, model, optimizer, batch_accumulation,device):
+def train_epoch( loader, model, optimizer, batch_accumulation,device,epoch):
 
     model.train()
     optimizer.zero_grad()
@@ -53,11 +54,13 @@ def train_epoch( loader, model, optimizer, batch_accumulation,device):
         loss.backward()
         # Parameters update after accumulating gradients for given num. batches.
         if ((iter + 1) % batch_accumulation == 0) or (iter + 1 == len(loader)):
-            print("Performing optimization step...")
             torch.nn.utils.clip_grad_norm_(model.parameters(), 1.0)
             optimizer.step()
             optimizer.zero_grad()
-            print(f"Loss: {loss.item():.4f} | Prediction Score: {pred_score.mean().item():.4f}")
+            ap_per_class = average_precision_score(true, pred_score, average=None)
+            mean_ap = ap_per_class.mean()
+            LoggerUpdate(loss,mean_ap,epoch)
+
 
 def custom_train(loaders, model, optimizer, scheduler,device):
     """
@@ -73,8 +76,8 @@ def custom_train(loaders, model, optimizer, scheduler,device):
     start_epoch = 0
     end_epoch = 200
     batch_accumulation = 10
-    for _ in range(start_epoch, end_epoch):
-        train_epoch( loaders[0], model, optimizer, batch_accumulation,device)
+    for epoch in tqdm(range(start_epoch, end_epoch), desc="Training Epochs"):
+        train_epoch( loaders[0], model, optimizer, batch_accumulation,device,epoch)
         scheduler.step()
 
 if __name__ == "__main__":

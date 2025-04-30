@@ -1,21 +1,24 @@
 import wandb
+import numpy as np
 
-def GCNLoggerInit(device):
+def LoggerInit(device):
     wandb.init(
       # Set the project where this run will be logged
-      project="GCN-intro",
+      project="Graph-Mamba",
       # We pass a run name (otherwise it’ll be randomly assigned, like sunshine-lollypop-10)
-      name="experiment_1",
+      name="experiment-1",
       # Track hyperparameters and run metadata
       config={
-      "architecture": "GCN",
-      "dataset": "Cora (data[0])",
+      "architecture": "CustomGatedGCN+Mamba_Hybrid_Degree_Noise (Local + Global Model Type)",
+      "dataset": "Peptides-functional",
       "epochs": 200,
       "device": device
     })
 
-def GCNLoggerUpdate(loss):
-    wandb.log({"loss": loss})
+def LoggerUpdate(loss,ap,epoch):
+    wandb.log({"loss": loss},step=epoch)
+    wandb.log({"AP_mean": np.mean(ap)},step=epoch)
+    wandb.log({"AP": {f"Class_{i}": ap[i] for i in range(len(ap))}},step=epoch)
 
-def GCNLoggerEnd():
+def LoggerEnd():
     wandb.finish()
