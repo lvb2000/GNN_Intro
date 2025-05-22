@@ -271,6 +271,7 @@ class GMBLayer(torch.nn.Module):
         # Append to forward path
         h_out_list.append(h_local)
 
+        h_dense, mask = to_dense_batch(h, batch.batch)
         # Forward pass for global attention block (Mamba_Hybrid_Degree_Noise)
         if batch.split == 'train':
             # Get degree of each node in batch
