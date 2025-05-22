@@ -9,6 +9,7 @@ from peptides_functional import PeptidesFunctionalDataset
 from torch_geometric.utils import (get_laplacian, to_scipy_sparse_matrix,
                                    to_undirected)
 from torch_geometric.graphgym.loader import index2mask, set_dataset_attr
+from scipy.linalg import eigh as scipy_eigh
 
 
 
@@ -203,8 +204,6 @@ def pre_transform_in_memory(dataset, transform_func):
     if transform_func is None:
         return dataset
 
-    #data_list = [transform_func(dataset.get(i))
-    #             for i in range(len(dataset))]
     data_list = [transform_func(dataset.get(i)) 
                 for i in tqdm(range(len(dataset)), 
                 desc="Pre-transforming")]
@@ -253,10 +252,7 @@ def compute_posenc_stats(data, is_undirected):
         *get_laplacian(undir_edge_index, normalization=laplacian_norm_type,
                         num_nodes=N)
     )
-    evals, evects = np.linalg.eigh(L.toarray())
-    #max_eig_index = np.argmax(evals)
-    #max_eigenvector = evects[:, max_eig_index]
-    #centrality = max_eigenvector / np.linalg.norm(max_eigenvector)
+    evals, evects = scipy_eigh(L.toarray())
 
     max_freqs=10
     eigvec_norm='L2'
