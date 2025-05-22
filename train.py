@@ -83,6 +83,10 @@ def eval_epoch(loader, model, device, epoch, split='val'):
             losses.append(_loss)
         preds = np.vstack(preds)
         trues = np.vstack(trues)
+        # Remove rows where preds or trues contain NaNs
+        mask = ~(np.isnan(preds).any(axis=1) | np.isnan(trues).any(axis=1))
+        preds = preds[mask]
+        trues = trues[mask]
         ap_per_class = average_precision_score(trues, preds, average=None)
         mean_ap = ap_per_class.mean()
         losses = np.array(losses)
@@ -101,6 +105,10 @@ def eval_epoch(loader, model, device, epoch, split='val'):
             _true = true.detach().cpu().numpy()
             _pred = pred_score.detach().cpu().numpy()
             _loss = loss.detach().cpu().numpy()
+            # Remove rows where _true or _pred contain NaNs
+            mask = ~(np.isnan(_true).any(axis=1) | np.isnan(_pred).any(axis=1))
+            _true = _true[mask]
+            _pred = _pred[mask]
             trues.append(_true)
             preds.append(_pred)
             losses.append(_loss)
