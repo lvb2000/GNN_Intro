@@ -40,7 +40,6 @@ def trainGCN(model,data):
         LoggerUpdate(loss)
 
 def train_epoch( loader, model, optimizer, batch_accumulation,device,epoch):
-
     model.train()
     optimizer.zero_grad()
     for iter, batch in enumerate(loader):
@@ -138,8 +137,6 @@ def custom_train(loaders, model, optimizer, scheduler,device):
     end_epoch = 200
     batch_accumulation = 10
     for epoch in tqdm(range(start_epoch, end_epoch), desc="Training Epochs"):
-        eval_epoch(loaders[1],model,device,epoch)
-        eval_epoch(loaders[2],model,device,0,split="test")
         train_epoch( loaders[0], model, optimizer, batch_accumulation,device,epoch)
         scheduler.step()
         eval_epoch(loaders[1],model,device,epoch)
