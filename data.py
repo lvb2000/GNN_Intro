@@ -261,6 +261,12 @@ def compute_posenc_stats(data, is_undirected):
         evals=evals, evects=evects,
         max_freqs=max_freqs,
         eigvec_norm=eigvec_norm)
+    
+    import numpy as np
+    if np.isnan(data.EigVals).any():
+        print("Warning: NaN values found in Eigenvalues!")
+    if np.isnan(data.EigVecs).any():
+        print("Warning: NaN values found in Eigenvectors!")
         
     return data
 
