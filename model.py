@@ -367,6 +367,13 @@ class GatedGCNLayer(pygnn.conv.MessagePassing):
         # ICLR 2022 https://openreview.net/pdf?id=e95i1IHcWj
         pe_LapPE = batch.pe_EquivStableLapPE if self.EquivStablePE else None
 
+        if self.EquivStablePE:
+            pe_LapPE = batch.pe_EquivStableLapPE
+            print("LapPE:", pe_LapPE)
+            print("LapPE shape:", pe_LapPE.shape)
+            if torch.isnan(pe_LapPE).any():
+                print("Warning: NaN values found in LapPE!")
+
         x, e = self.propagate(edge_index,
                               Bx=Bx, Dx=Dx, Ex=Ex, Ce=Ce,
                               e=e, Ax=Ax,
